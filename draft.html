@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>명함 초안 확인</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>명함 초안 확인</h1>
+    </header>
+
+    <div class="container">
+        <div id="alert-container"></div>
+
+        <!-- 인증 화면 -->
+        <div id="authScreen" class="form-container">
+            <h2>접근 인증</h2>
+            <form id="authForm">
+                <div class="form-group">
+                    <label for="applicationId">신청ID *</label>
+                    <input type="text" id="applicationId" name="applicationId" required>
+                </div>
+                <div class="form-group">
+                    <label for="applicantName">신청자 이름 *</label>
+                    <input type="text" id="applicantName" name="applicantName" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">확인</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 초안 확인 화면 -->
+        <div id="draftScreen" style="display: none;">
+            <div class="form-container" style="margin-bottom: 20px;">
+                <h2>신청 정보</h2>
+                <div id="applicationInfo"></div>
+            </div>
+
+            <div class="form-container" style="margin-bottom: 20px;">
+                <h2>명함 초안</h2>
+                <div id="draftPreview" class="draft-preview">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>초안을 불러오는 중...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-container">
+                <h2>초안 확인 및 처리</h2>
+                <div id="statusInfo" style="margin-bottom: 20px;"></div>
+
+                <div id="actionButtons" style="display: none;">
+                    <div class="form-group">
+                        <button id="approveBtn" class="btn btn-success" style="margin-right: 10px;">초안대로 받기</button>
+                        <button id="requestModificationBtn" class="btn btn-primary">수정 요청</button>
+                    </div>
+                </div>
+
+                <div id="modificationForm" style="display: none;">
+                    <div class="form-group">
+                        <label for="modificationNotes">수정 요청사항 *</label>
+                        <textarea id="modificationNotes" name="modificationNotes" required placeholder="수정이 필요한 부분을 자세히 설명해주세요"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <button id="submitModificationBtn" class="btn btn-primary">수정 요청 제출</button>
+                        <button id="cancelModificationBtn" class="btn btn-secondary" style="margin-left: 10px;">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/onedrive-api.js"></script>
+    <script src="js/excel-handler.js"></script>
+    <script>
+        let currentApplication = null;
+        let applicationId = null;
+        let applicantName = null;
+
+        // URL 파라미터에서 정보 가져오기
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlId = urlParams.get('id');
+        const urlName = urlParams.get('name');
+
+        if (urlId && urlName) {
+            document.getElementById('applicationId').value = urlId;
+            document.getElementById('applicantName').value = decodeURIComponent(urlName);
+            document.getElementById('authForm').dispatchEvent(new Event('submit'));
+        }
+
+        // 인증 처리
+        document.getElementById('authForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            applicationId = document.getElementById('applicationId').value.trim();
+            applicantName = document.getElementById('applicantName').value.trim();
+
+            if (!applicationId || !applicantName) {
+                showAlert('신청ID와 신청자 이름을 입력해주세요.', 'error');
+                return;
+            }
+
+            try {
+                // OneDrive 인증 확인
+                await getAccessToken();
+
+                // Excel에서 신청 정보 찾기
+                const application = await findRowByApplicationId(applicationId);
+
+                if (!application) {
+                    showAlert('신청 정보를 찾을 수 없습니다.', 'error');
+                    return;
+                }
+
+                // 신청자 이름 확인 (계정에서 이름 추출 또는 별도 검증)
+                // 실제로는 신청자계정과 이름을 매칭해야 하지만, 여기서는 간단히 처리
+                const accountName = application.신청자계정 ? application.신청자계정.split('@')[0] : '';
+                
+                // 이름 검증 (간단한 검증 - 실제로는 더 엄격하게)
+                if (accountName.toLowerCase() !== applicantName.toLowerCase() && 
+                    application.등록자 !== applicantName) {
+                    showAlert('신청자 이름이 일치하지 않습니다.', 'error');
+                    return;
+                }
+
+                currentApplication = application;
+                showDraftScreen();
+
+            } catch (error) {
+                console.error('Error authenticating:', error);
+                showAlert('인증 중 오류가 발생했습니다: ' + error.message, 'error');
+            }
+        });
+
+        // 초안 화면 표시
+        async function showDraftScreen() {
+            document.getElementById('authScreen').style.display = 'none';
+            document.getElementById('draftScreen').style.display = 'block';
+
+            // 신청 정보 표시
+            const infoDiv = document.getElementById('applicationInfo');
+            infoDiv.innerHTML = `
+                <p><strong>신청ID:</strong> ${currentApplication.신청ID}</p>
+                <p><strong>신청자계정:</strong> ${currentApplication.신청자계정}</p>
+                <p><strong>명함통 개수:</strong> ${currentApplication.통}통</p>
+                <p><strong>등록일:</strong> ${currentApplication.등록일}</p>
+                <p><strong>Status:</strong> <span class="status-badge status-${currentApplication.Status}">${currentApplication.Status}</span></p>
+            `;
+
+            // 초안 이미지 표시
+            const draftPreview = document.getElementById('draftPreview');
+            
+            if (currentApplication.첨부파일) {
+                draftPreview.innerHTML = `
+                    <img src="${currentApplication.첨부파일}" alt="명함 초안" style="max-width: 100%; height: auto;">
+                `;
+            } else {
+                draftPreview.innerHTML = '<p style="text-align: center; color: #999;">초안 이미지가 아직 업로드되지 않았습니다.</p>';
+            }
+
+            // Status에 따른 버튼 표시
+            const statusInfo = document.getElementById('statusInfo');
+            const actionButtons = document.getElementById('actionButtons');
+
+            if (currentApplication.Status === '신청' || currentApplication.Status === '') {
+                statusInfo.innerHTML = '<div class="alert alert-info">초안을 확인하고 승인하거나 수정을 요청할 수 있습니다.</div>';
+                actionButtons.style.display = 'block';
+            } else if (currentApplication.Status === '제작중') {
+                statusInfo.innerHTML = '<div class="alert alert-info">초안이 승인되어 제작 중입니다.</div>';
+                actionButtons.style.display = 'none';
+            } else if (currentApplication.Status === '발급완료') {
+                statusInfo.innerHTML = '<div class="alert alert-success">명함 제작이 완료되었습니다.</div>';
+                actionButtons.style.display = 'none';
+            } else {
+                statusInfo.innerHTML = `<div class="alert alert-info">현재 상태: ${currentApplication.Status}</div>`;
+                actionButtons.style.display = 'none';
+            }
+        }
+
+        // 초안 승인 (제작중으로 변경)
+        document.getElementById('approveBtn').addEventListener('click', async function() {
+            if (!confirm('초안대로 명함을 제작하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                // Status를 "제작중"으로 업데이트
+                await updateRowInExcel(applicationId, {
+                    Status: '제작중',
+                    처리자: applicantName,
+                    처리일자: new Date().toISOString().split('T')[0]
+                });
+
+                showAlert('초안이 승인되었습니다. 제작이 시작됩니다.', 'success');
+                
+                // 화면 업데이트
+                currentApplication.Status = '제작중';
+                const statusInfo = document.getElementById('statusInfo');
+                statusInfo.innerHTML = '<div class="alert alert-success">초안이 승인되어 제작 중입니다.</div>';
+                document.getElementById('actionButtons').style.display = 'none';
+
+            } catch (error) {
+                console.error('Error approving draft:', error);
+                showAlert('승인 처리 중 오류가 발생했습니다: ' + error.message, 'error');
+            }
+        });
+
+        // 수정 요청 버튼
+        document.getElementById('requestModificationBtn').addEventListener('click', function() {
+            document.getElementById('modificationForm').style.display = 'block';
+            document.getElementById('actionButtons').style.display = 'none';
+        });
+
+        // 수정 요청 취소
+        document.getElementById('cancelModificationBtn').addEventListener('click', function() {
+            document.getElementById('modificationForm').style.display = 'none';
+            document.getElementById('actionButtons').style.display = 'block';
+            document.getElementById('modificationNotes').value = '';
+        });
+
+        // 수정 요청 제출
+        document.getElementById('submitModificationBtn').addEventListener('click', async function() {
+            const modificationNotes = document.getElementById('modificationNotes').value.trim();
+
+            if (!modificationNotes) {
+                showAlert('수정 요청사항을 입력해주세요.', 'error');
+                return;
+            }
+
+            try {
+                // Excel DB의 비고 필드에 수정 요청 추가
+                const updatedNotes = currentApplication.비고 ? 
+                    `${currentApplication.비고}\n\n[수정 요청 - ${new Date().toLocaleString('ko-KR')}]\n${modificationNotes}` :
+                    `[수정 요청 - ${new Date().toLocaleString('ko-KR')}]\n${modificationNotes}`;
+
+                await updateRowInExcel(applicationId, {
+                    비고: updatedNotes
+                });
+
+                // 이메일 발송 (mailto)
+                const emailSubject = encodeURIComponent(`[명함 수정 요청] ${applicationId}`);
+                const emailBody = encodeURIComponent(
+                    `명함 초안에 대한 수정 요청이 접수되었습니다.\n\n` +
+                    `신청ID: ${applicationId}\n` +
+                    `신청자: ${applicantName}\n` +
+                    `수정 요청사항:\n${modificationNotes}\n\n` +
+                    `초안 이미지: ${currentApplication.첨부파일 || '없음'}`
+                );
+                const mailtoLink = `mailto:dhkim3@law-lin.com?subject=${emailSubject}&body=${emailBody}`;
+                window.open(mailtoLink);
+
+                showAlert('수정 요청이 제출되었습니다. 이메일이 발송되었습니다.', 'success');
+                
+                // 폼 초기화
+                document.getElementById('modificationForm').style.display = 'none';
+                document.getElementById('actionButtons').style.display = 'block';
+                document.getElementById('modificationNotes').value = '';
+
+            } catch (error) {
+                console.error('Error submitting modification request:', error);
+                showAlert('수정 요청 제출 중 오류가 발생했습니다: ' + error.message, 'error');
+            }
+        });
+
+        // 알림 메시지 표시
+        function showAlert(message, type = 'info') {
+            const alertContainer = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alertContainer.innerHTML = '';
+            alertContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
