@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>신청 내역 조회</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      max-width: 500px;
+      width: 100%;
+      padding: 40px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      text-align: center;
+      font-size: 28px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    
+    input[type="text"],
+    input[type="email"] {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 30px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 10px;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .message.show {
+      display: block;
+    }
+    
+    .status-info {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 6px;
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .status-info.show {
+      display: block;
+    }
+    
+    .status-info h3 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .status-info p {
+      color: #666;
+      margin-bottom: 5px;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    
+    .status-신청 { background: #fff3cd; color: #856404; }
+    .status-초안전달 { background: #cfe2ff; color: #084298; }
+    .status-수정요청 { background: #f8d7da; color: #721c24; }
+    .status-제작 { background: #d1e7dd; color: #0f5132; }
+    .status-지급완료 { background: #d4edda; color: #155724; }
+    .status-삭제 { background: #f8d7da; color: #721c24; }
+    
+    .link-btn {
+      display: inline-block;
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    .link-btn:hover {
+      background: #5568d3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>신청 내역 조회</h1>
+    
+    <div id="message" class="message"></div>
+    
+    <form id="checkForm">
+      <div class="form-group">
+        <label for="email">신청자 이메일</label>
+        <input type="email" id="email" name="email" required placeholder="신청 시 입력한 이메일 주소">
+      </div>
+      
+      <div class="form-group">
+        <label for="applicationId">신청ID</label>
+        <input type="text" id="applicationId" name="applicationId" required placeholder="예: LN-2025-1001">
+      </div>
+      
+      <button type="submit" class="btn" id="checkBtn">조회하기</button>
+    </form>
+    
+    <div id="statusInfo" class="status-info">
+      <h3>신청 내역</h3>
+      <p><strong>신청ID:</strong> <span id="resultId"></span></p>
+      <p><strong>등록일:</strong> <span id="resultDate"></span></p>
+      <p><strong>상태:</strong></p>
+      <span id="resultStatus" class="status-badge"></span>
+      <p id="resultMessage" style="margin-top: 15px;"></p>
+    </div>
+  </div>
+  
+  <script>
+    document.getElementById('checkForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const checkBtn = document.getElementById('checkBtn');
+      const messageDiv = document.getElementById('message');
+      const statusInfo = document.getElementById('statusInfo');
+      
+      checkBtn.disabled = true;
+      checkBtn.textContent = '조회 중...';
+      
+      const email = document.getElementById('email').value.trim();
+      const applicationId = document.getElementById('applicationId').value.trim();
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            messageDiv.className = 'message success show';
+            messageDiv.textContent = '조회가 완료되었습니다.';
+            
+            // 결과 표시
+            document.getElementById('resultId').textContent = result.applicationId;
+            document.getElementById('resultDate').textContent = result.registeredDate;
+            document.getElementById('resultStatus').textContent = result.status;
+            document.getElementById('resultStatus').className = 'status-badge status-' + result.status;
+            document.getElementById('resultMessage').textContent = result.message;
+            
+            statusInfo.classList.add('show');
+          } else {
+            messageDiv.className = 'message error show';
+            messageDiv.textContent = result.message;
+            statusInfo.classList.remove('show');
+          }
+          
+          checkBtn.disabled = false;
+          checkBtn.textContent = '조회하기';
+        })
+        .withFailureHandler(function(error) {
+          messageDiv.className = 'message error show';
+          messageDiv.textContent = '오류가 발생했습니다: ' + error.message;
+          statusInfo.classList.remove('show');
+          
+          checkBtn.disabled = false;
+          checkBtn.textContent = '조회하기';
+        })
+        .checkApplicationStatus(email, applicationId);
+    });
+  </script>
+</body>
+</html>
+

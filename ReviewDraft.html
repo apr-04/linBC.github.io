@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>명함 초안 확인</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      max-width: 700px;
+      width: 100%;
+      padding: 40px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      text-align: center;
+      font-size: 28px;
+    }
+    
+    .info-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 6px;
+      margin-bottom: 30px;
+    }
+    
+    .info-section p {
+      margin-bottom: 10px;
+      color: #555;
+    }
+    
+    .info-section strong {
+      color: #333;
+    }
+    
+    .file-section {
+      margin-bottom: 30px;
+    }
+    
+    .file-link {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+    
+    .file-link:hover {
+      background: #5568d3;
+    }
+    
+    .action-section {
+      margin-top: 30px;
+    }
+    
+    .btn-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 14px 30px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn-approve {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      color: white;
+    }
+    
+    .btn-request {
+      background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+      color: white;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .message.show {
+      display: block;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .modal.show {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    
+    .modal-content h3 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    
+    .modal-content textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      min-height: 120px;
+      resize: vertical;
+      margin-bottom: 20px;
+    }
+    
+    .modal-content textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .modal-buttons .btn {
+      flex: 1;
+    }
+    
+    .btn-cancel {
+      background: #6c757d;
+      color: white;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>명함 초안 확인</h1>
+    
+    <div id="message" class="message"></div>
+    
+    <div id="loading" class="loading">로딩 중...</div>
+    
+    <div id="content" style="display: none;">
+      <div class="info-section">
+        <p><strong>신청ID:</strong> <span id="applicationId"></span></p>
+        <p><strong>신청자:</strong> <span id="applicantName"></span></p>
+        <p><strong>현재 상태:</strong> <span id="currentStatus"></span></p>
+      </div>
+      
+      <div class="file-section">
+        <h3 style="margin-bottom: 15px; color: #333;">초안 파일</h3>
+        <a id="fileLink" href="#" target="_blank" class="file-link">초안 파일 보기</a>
+      </div>
+      
+      <div class="action-section" id="actionSection">
+        <h3 style="margin-bottom: 15px; color: #333;">처리 선택</h3>
+        <p style="color: #666; margin-bottom: 15px;">초안을 확인하신 후 아래 버튼을 선택해주세요.</p>
+        
+        <div class="btn-group">
+          <button class="btn btn-approve" id="approveBtn">제작 신청</button>
+          <button class="btn btn-request" id="requestBtn">추가 수정 요청</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 수정 요청 모달 -->
+  <div id="modificationModal" class="modal">
+    <div class="modal-content">
+      <h3>수정 요청 사유</h3>
+      <textarea id="modificationReason" placeholder="수정이 필요한 부분을 자세히 입력해주세요."></textarea>
+      <div class="modal-buttons">
+        <button class="btn btn-cancel" id="cancelBtn">취소</button>
+        <button class="btn btn-request" id="submitModificationBtn">수정 요청 제출</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 페이지 로드 시 데이터 가져오기
+    window.onload = function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const applicationId = urlParams.get('id');
+      
+      if (!applicationId) {
+        document.getElementById('loading').textContent = '잘못된 접근입니다.';
+        return;
+      }
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          document.getElementById('loading').style.display = 'none';
+          
+          if (result.success) {
+            document.getElementById('content').style.display = 'block';
+            document.getElementById('applicationId').textContent = result.applicationId;
+            document.getElementById('applicantName').textContent = result.name;
+            document.getElementById('currentStatus').textContent = result.status;
+            
+            if (result.fileUrl) {
+              document.getElementById('fileLink').href = result.fileUrl;
+            } else {
+              document.getElementById('fileLink').textContent = '초안 파일이 아직 준비되지 않았습니다.';
+              document.getElementById('fileLink').style.pointerEvents = 'none';
+              document.getElementById('fileLink').style.opacity = '0.5';
+            }
+            
+            // 초안전달 또는 수정요청 상태가 아니면 버튼 비활성화
+            if (!result.canApprove) {
+              document.getElementById('approveBtn').disabled = true;
+              document.getElementById('requestBtn').disabled = true;
+              document.getElementById('actionSection').innerHTML = '<p style="color: #666;">이 신청은 이미 처리되었습니다.</p>';
+            }
+          } else {
+            document.getElementById('loading').textContent = result.message;
+          }
+        })
+        .withFailureHandler(function(error) {
+          document.getElementById('loading').textContent = '오류가 발생했습니다: ' + error.message;
+        })
+        .getApplicationForReview(applicationId);
+    };
+    
+    // 제작 승인 버튼
+    document.getElementById('approveBtn').addEventListener('click', function() {
+      if (!confirm('제작을 승인하시겠습니까?')) {
+        return;
+      }
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      const applicationId = urlParams.get('id');
+      const btn = this;
+      
+      btn.disabled = true;
+      btn.textContent = '처리 중...';
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          const messageDiv = document.getElementById('message');
+          if (result.success) {
+            messageDiv.className = 'message success show';
+            messageDiv.textContent = result.message;
+            document.getElementById('actionSection').innerHTML = '<p style="color: #28a745; font-weight: 600;">제작 승인이 완료되었습니다.</p>';
+          } else {
+            messageDiv.className = 'message error show';
+            messageDiv.textContent = result.message;
+            btn.disabled = false;
+            btn.textContent = '제작 신청';
+          }
+        })
+        .withFailureHandler(function(error) {
+          const messageDiv = document.getElementById('message');
+          messageDiv.className = 'message error show';
+          messageDiv.textContent = '오류가 발생했습니다: ' + error.message;
+          btn.disabled = false;
+          btn.textContent = '제작 신청';
+        })
+        .approveProduction(applicationId);
+    });
+    
+    // 수정 요청 버튼
+    document.getElementById('requestBtn').addEventListener('click', function() {
+      document.getElementById('modificationModal').classList.add('show');
+      document.getElementById('modificationReason').focus();
+    });
+    
+    // 모달 닫기
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+      document.getElementById('modificationModal').classList.remove('show');
+      document.getElementById('modificationReason').value = '';
+    });
+    
+    // 수정 요청 제출
+    document.getElementById('submitModificationBtn').addEventListener('click', function() {
+      const reason = document.getElementById('modificationReason').value.trim();
+      
+      if (!reason) {
+        alert('수정 사유를 입력해주세요.');
+        return;
+      }
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      const applicationId = urlParams.get('id');
+      const btn = this;
+      
+      btn.disabled = true;
+      btn.textContent = '처리 중...';
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          document.getElementById('modificationModal').classList.remove('show');
+          document.getElementById('modificationReason').value = '';
+          
+          const messageDiv = document.getElementById('message');
+          if (result.success) {
+            messageDiv.className = 'message success show';
+            messageDiv.textContent = result.message;
+            document.getElementById('actionSection').innerHTML = '<p style="color: #ffc107; font-weight: 600;">수정 요청이 완료되었습니다. 관리자가 확인 후 수정된 초안을 다시 전달해드립니다.</p>';
+          } else {
+            messageDiv.className = 'message error show';
+            messageDiv.textContent = result.message;
+          }
+          
+          btn.disabled = false;
+          btn.textContent = '수정 요청 제출';
+        })
+        .withFailureHandler(function(error) {
+          const messageDiv = document.getElementById('message');
+          messageDiv.className = 'message error show';
+          messageDiv.textContent = '오류가 발생했습니다: ' + error.message;
+          btn.disabled = false;
+          btn.textContent = '수정 요청 제출';
+        })
+        .requestModification(applicationId, reason);
+    });
+  </script>
+</body>
+</html>
+
