@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>명함 초안 확인 - 법무법인 린</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>명함 초안 확인</h1>
+    <h2 id="subtitle">초안을 확인하고 승인 또는 수정을 요청해주세요</h2>
+
+    <div id="alertBox" class="hidden"></div>
+
+    <div id="loadingBox" class="alert alert-info">
+      <span class="loading"></span> 데이터를 불러오는 중입니다...
+    </div>
+
+    <div id="contentBox" class="hidden">
+      <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <div><strong>신청ID:</strong> <span id="applicationId"></span></div>
+        <div><strong>신청자:</strong> <span id="applicantName"></span></div>
+      </div>
+
+      <div class="file-preview">
+        <h3 style="margin-bottom: 15px;">📄 명함 초안</h3>
+        <div id="fileContent"></div>
+      </div>
+
+      <div id="actionBox" style="margin-top: 30px;">
+        <h3 style="margin-bottom: 15px;">다음 단계를 선택해주세요</h3>
+        
+        <div class="button-group">
+          <button id="approveBtn" onclick="approveProduction()">
+            ✅ 제작 신청
+          </button>
+          <button id="modifyBtn" class="btn-danger" onclick="showModifyForm()">
+            ✏️ 추가 수정 요청
+          </button>
+        </div>
+
+        <div id="modifyForm" class="hidden" style="margin-top: 20px; padding: 20px; background-color: #fff3cd; border-radius: 5px;">
+          <h4 style="margin-bottom: 10px;">수정 요청 사유</h4>
+          <textarea id="modifyReason" style="width: 100%; min-height: 100px; margin-bottom: 10px;" placeholder="수정이 필요한 부분을 상세히 입력해주세요"></textarea>
+          <div class="button-group">
+            <button onclick="submitModification()" class="btn-danger">수정 요청 제출</button>
+            <button onclick="hideModifyForm()" class="btn-secondary">취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/confirm.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>신청 내역 조회 - 법무법인 린</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>신청 내역 조회</h1>
+    <h2>신청ID와 이메일로 현재 상태를 확인하세요</h2>
+
+    <div id="alertBox" class="hidden"></div>
+
+    <form id="statusForm">
+      <div class="form-group">
+        <label for="applicationId">신청ID <span class="required">*</span></label>
+        <input type="text" id="applicationId" name="applicationId" placeholder="예: LN-2025-1001" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">신청자 이메일 <span class="required">*</span></label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="button-group">
+        <button type="submit" id="searchBtn">조회하기</button>
+        <button type="button" class="btn-secondary" onclick="location.href='index.html'">홈으로</button>
+      </div>
+    </form>
+
+    <div id="statusResult" class="status-result hidden">
+      <h3 style="margin-bottom: 20px;">📋 신청 정보</h3>
+      <div class="status-item">
+        <span class="status-label">신청ID:</span>
+        <span id="resultId"></span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">신청자:</span>
+        <span id="resultName"></span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">신청 통 수:</span>
+        <span id="resultQuantity"></span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">신청일:</span>
+        <span id="resultDate"></span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">현재 상태:</span>
+        <span id="resultStatus" class="status-badge"></span>
+      </div>
+      <div id="processedDateItem" class="status-item hidden">
+        <span class="status-label">처리일:</span>
+        <span id="resultProcessedDate"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/status.js"></script>
+</body>
+</html>
