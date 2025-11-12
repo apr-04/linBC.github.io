@@ -1,0 +1,5 @@
+NEXT_PUBLIC_AZURE_CLIENT_ID=5b165094-6f98-4818-9667-f81e651ce7d0
+NEXT_PUBLIC_AZURE_TENANT_ID=20c53626-8c84-4cb2-b049-ae1f603445a6
+# Microsoft Client Secret (Azure Portal > App registrations > Your app > Certificates & secrets에서 생성)
+# 이 값을 Google Apps Script의 PropertiesService에 'MS_CLIENT_SECRET' 키로 저장하세요
+MS_CLIENT_SECRET=

@@ -206,3 +206,210 @@
 </body>
 </html>
 
+=======
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>명함 신청</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>명함 신청</h1>
+    </header>
+
+    <div class="container">
+        <div id="alert-container"></div>
+
+        <div class="form-container">
+            <form id="applicationForm">
+                <div class="form-group">
+                    <label for="applicantName">신청자 이름 *</label>
+                    <input type="text" id="applicantName" name="applicantName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="applicantAccount">신청자 계정 *</label>
+                    <input type="text" id="applicantAccount" name="applicantAccount" required placeholder="예: hong@law-lin.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="boxCount">명함통 개수 *</label>
+                    <input type="number" id="boxCount" name="boxCount" min="1" value="1" required>
+                    <small style="color: #666;">(1통 = 200매)</small>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="sameAsExisting" name="sameAsExisting">
+                    <label for="sameAsExisting">기존 명함과 동일하게 제작</label>
+                </div>
+
+                <div class="form-group radio-group">
+                    <label>신청자 유형 *</label>
+                    <label>
+                        <input type="radio" name="applicantType" value="lawyer" required>
+                        변호사
+                    </label>
+                    <label>
+                        <input type="radio" name="applicantType" value="staff" required>
+                        Staff
+                    </label>
+                </div>
+
+                <div class="form-group" id="lawyerNameGroup" style="display: none;">
+                    <label for="lawyerName">담당 변호사 이름</label>
+                    <input type="text" id="lawyerName" name="lawyerName" placeholder="Staff인 경우 담당 변호사 명함도 신청">
+                </div>
+
+                <div class="form-group">
+                    <label for="notes">비고 (요청사항)</label>
+                    <textarea id="notes" name="notes" placeholder="추가 요청사항을 입력하세요"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">신청하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/onedrive-api.js"></script>
+    <script src="js/excel-handler.js"></script>
+    <script>
+        // 신청ID 생성 함수
+        function generateApplicationId(name) {
+            const now = new Date();
+            const yy = String(now.getFullYear()).slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const namePart = name.replace(/\s+/g, '').toLowerCase().substring(0, 10);
+            return `lawlin-${yy}${mm}-${namePart}`;
+        }
+
+        // Staff 선택 시 담당 변호사 입력 필드 표시
+        document.querySelectorAll('input[name="applicantType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const lawyerNameGroup = document.getElementById('lawyerNameGroup');
+                if (this.value === 'staff') {
+                    lawyerNameGroup.style.display = 'block';
+                } else {
+                    lawyerNameGroup.style.display = 'none';
+                    document.getElementById('lawyerName').value = '';
+                }
+            });
+        });
+
+        // 알림 메시지 표시
+        function showAlert(message, type = 'info') {
+            const alertContainer = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alertContainer.innerHTML = '';
+            alertContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // 폼 제출 처리
+        document.getElementById('applicationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = {
+                applicantName: document.getElementById('applicantName').value.trim(),
+                applicantAccount: document.getElementById('applicantAccount').value.trim(),
+                boxCount: parseInt(document.getElementById('boxCount').value),
+                sameAsExisting: document.getElementById('sameAsExisting').checked,
+                applicantType: document.querySelector('input[name="applicantType"]:checked').value,
+                lawyerName: document.getElementById('lawyerName').value.trim(),
+                notes: document.getElementById('notes').value.trim()
+            };
+
+            // 유효성 검사
+            if (!formData.applicantName || !formData.applicantAccount) {
+                showAlert('신청자 이름과 계정을 입력해주세요.', 'error');
+                return;
+            }
+
+            try {
+                // 신청ID 생성
+                const applicationId = generateApplicationId(formData.applicantName);
+
+                // Excel DB에 저장할 데이터 준비
+                const rowData = {
+                    신청ID: applicationId,
+                    신청자계정: formData.applicantAccount,
+                    통: formData.boxCount,
+                    첨부파일: '',
+                    비고: formData.notes,
+                    Status: '신청',
+                    등록자: formData.applicantName,
+                    등록일: new Date().toISOString().split('T')[0],
+                    처리자: '',
+                    처리일자: '',
+                    기존동일여부: formData.sameAsExisting ? 'Y' : 'N'
+                };
+
+                // Staff인 경우 담당 변호사 정보 추가
+                if (formData.applicantType === 'staff' && formData.lawyerName) {
+                    rowData.비고 = `[Staff] 담당 변호사: ${formData.lawyerName}\n${rowData.비고}`.trim();
+                }
+
+                // OneDrive 인증 확인
+                try {
+                    await getAccessToken();
+                } catch (error) {
+                    showAlert('OneDrive 인증이 필요합니다. 페이지를 새로고침하거나 다시 시도해주세요.', 'error');
+                    return;
+                }
+
+                // Excel DB에 저장
+                await addRowToExcel(rowData);
+
+                // 이메일 발송 (mailto 링크 사용)
+                const emailSubject = encodeURIComponent(`[명함 신청] ${applicationId} - ${formData.applicantName}`);
+                const emailBody = encodeURIComponent(
+                    `명함 신청이 접수되었습니다.\n\n` +
+                    `신청ID: ${applicationId}\n` +
+                    `신청자: ${formData.applicantName}\n` +
+                    `계정: ${formData.applicantAccount}\n` +
+                    `명함통 개수: ${formData.boxCount}통 (${formData.boxCount * 200}매)\n` +
+                    `기존 명함 동일: ${formData.sameAsExisting ? '예' : '아니오'}\n` +
+                    `신청자 유형: ${formData.applicantType === 'lawyer' ? '변호사' : 'Staff'}\n` +
+                    (formData.lawyerName ? `담당 변호사: ${formData.lawyerName}\n` : '') +
+                    `비고: ${formData.notes || '없음'}\n` +
+                    `등록일: ${rowData.등록일}`
+                );
+                const mailtoLink = `mailto:dhkim3@law-lin.com?subject=${emailSubject}&body=${emailBody}`;
+                
+                // 새 창에서 이메일 클라이언트 열기
+                window.open(mailtoLink);
+
+                showAlert(`신청이 완료되었습니다! 신청ID: ${applicationId}`, 'success');
+                
+                // 폼 초기화
+                document.getElementById('applicationForm').reset();
+                document.getElementById('lawyerNameGroup').style.display = 'none';
+
+            } catch (error) {
+                console.error('Error submitting application:', error);
+                showAlert('신청 처리 중 오류가 발생했습니다: ' + error.message, 'error');
+            }
+        });
+
+        // 페이지 로드 시 OneDrive 인증 확인
+        window.addEventListener('load', async function() {
+            try {
+                await getAccessToken();
+            } catch (error) {
+                console.log('OneDrive authentication required');
+            }
+        });
+    </script>
+</body>
+</html>

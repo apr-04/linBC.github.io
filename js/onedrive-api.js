@@ -146,5 +146,3 @@ async function listFilesInFolder(folderPath) {
     const data = await response.json();
     return data.value;
 }
-
-
