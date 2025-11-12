@@ -1,6 +1,6 @@
 # 명함 신청 관리 시스템
 
-Google Sheets와 Google Apps Script를 활용한 명함 신청 관리 시스템입니다.
+Microsoft 365 OneDrive Excel과 Google Apps Script를 활용한 명함 신청 관리 시스템입니다.
 
 ## 주요 기능
 
@@ -11,9 +11,10 @@ Google Sheets와 Google Apps Script를 활용한 명함 신청 관리 시스템�
 
 ## 시스템 구조
 
-### Google Sheets 구조
+### OneDrive Excel 파일 구조
 
-**시트 이름**: `신청목록`
+**파일 이름**: `명함 신청 관리 DB.xlsx`  
+**워크시트 이름**: `신청목록`
 
 | 열 | 이름 | 설명 |
 |---|---|---|
@@ -27,17 +28,24 @@ Google Sheets와 Google Apps Script를 활용한 명함 신청 관리 시스템�
 | H | 담당변호사 | Staff 선택 시 입력 |
 | I | 비고 | 요청사항 |
 | J | 등록일 | 신청 날짜 (자동입력) |
-| K | 첨부파일 | 초안 파일 Google Drive 링크 |
+| K | 첨부파일 | 초안 파일 OneDrive 링크 |
 | L | 처리자 | 관리자 이름 |
 | M | 처리일자 | 상태 변경 날짜 |
 
 ## 설치 및 설정 가이드
 
-### 1단계: Google Sheets 생성
+⚠️ **중요**: 이 시스템은 Microsoft 365 OneDrive를 데이터베이스로 사용합니다.
 
-1. Google Drive에서 새 Google Sheets 파일 생성
-2. 파일 이름을 "명함 신청 관리 DB"로 변경 (또는 원하는 이름)
-3. 첫 번째 시트 이름을 "신청목록"으로 변경
+### 사전 준비
+
+1. **OneDrive 설정**: `ONEDRIVE_SETUP.md` 파일을 먼저 참고하세요.
+2. **Azure AD 앱 등록**: Client ID와 Tenant ID가 이미 있으므로, Client Secret만 생성하면 됩니다.
+
+### 1단계: OneDrive Excel 파일 생성
+
+1. OneDrive에서 새 Excel 파일 생성
+2. 파일 이름을 "명함 신청 관리 DB.xlsx"로 변경
+3. 첫 번째 워크시트 이름을 "신청목록"으로 변경
 4. 첫 번째 행에 헤더 입력:
    ```
    신청ID | Status | 신청자계정 | 등록자 | 통 | 기존동일여부 | 변호사여부 | 담당변호사 | 비고 | 등록일 | 첨부파일 | 처리자 | 처리일자
@@ -45,29 +53,44 @@ Google Sheets와 Google Apps Script를 활용한 명함 신청 관리 시스템�
 
 ### 2단계: Google Apps Script 프로젝트 생성
 
-1. Google Sheets에서 **확장 프로그램 > Apps Script** 클릭
-2. 기본 `Code.gs` 파일의 내용을 삭제하고 제공된 `Code.gs` 내용으로 교체
-3. **파일 > 새로 만들기 > HTML 파일**을 클릭하여 다음 HTML 파일들을 생성:
+1. Google Apps Script 편집기에서 새 프로젝트 생성
+2. 다음 파일들을 생성:
+   - `Code.gs` (메인 코드)
+   - `MicrosoftGraphAPI.gs` (Microsoft Graph API 통신 모듈)
    - `UserForm.html` (명함 신청 폼)
    - `CheckStatus.html` (신청 내역 조회)
    - `ReviewDraft.html` (초안 확인)
    - `AdminPage.html` (관리자 페이지)
-4. 각 HTML 파일에 제공된 내용을 복사하여 붙여넣기
+3. 각 파일에 제공된 내용을 복사하여 붙여넣기
 
-### 3단계: 설정 변경
+### 3단계: Microsoft Graph API 설정
+
+**중요**: `ONEDRIVE_SETUP.md` 파일의 3단계를 따라 Client Secret을 설정하세요.
+
+1. Azure Portal에서 Client Secret 생성
+2. Google Apps Script의 PropertiesService에 Client Secret 저장:
+   ```javascript
+   function setClientSecret() {
+     var properties = PropertiesService.getScriptProperties();
+     properties.setProperty('MS_CLIENT_SECRET', '여기에_Client_Secret_값_입력');
+   }
+   ```
+
+### 4단계: 설정 변경
 
 `Code.gs` 파일 상단의 `CONFIG` 객체를 수정:
 
 ```javascript
 const CONFIG = {
-  SHEET_NAME: '신청목록',  // 시트 이름 확인
+  EXCEL_FILE_NAME: '명함 신청 관리 DB.xlsx', // OneDrive Excel 파일 이름
+  WORKSHEET_NAME: '신청목록', // 워크시트 이름
   ADMIN_EMAIL: 'bysong@law-lin.com',  // 관리자 이메일
   ADMIN_PASSWORD: 'admin123',  // 관리자 비밀번호 (반드시 변경!)
-  DRIVE_FOLDER_NAME: '명함 초안 파일'  // Drive 폴더 이름
+  ONEDRIVE_FOLDER_PATH: '/명함 초안 파일' // OneDrive 폴더 경로
 };
 ```
 
-### 4단계: 웹 앱 배포
+### 5단계: 웹 앱 배포
 
 1. Apps Script 편집기에서 **배포 > 새 배포** 클릭
 2. **유형 선택**에서 "웹 앱" 선택
@@ -78,17 +101,17 @@ const CONFIG = {
 4. **배포** 클릭
 5. 웹 앱 URL 복사 (예: `https://script.google.com/macros/s/...`)
 
-### 5단계: 권한 설정
+### 6단계: 권한 설정
 
 1. 첫 실행 시 권한 요청이 나타나면 **권한 검토** 클릭
 2. Google 계정 선택
 3. **고급** > **안전하지 않은 페이지로 이동** 클릭
 4. **허용** 클릭
 
-### 6단계: Google Drive 폴더 설정
+### 7단계: OneDrive 폴더 설정
 
-1. Google Drive에서 "명함 초안 파일" 폴더 생성 (또는 CONFIG에서 지정한 이름)
-2. 폴더 공유 설정은 자동으로 처리됩니다 (파일 업로드 시)
+1. OneDrive에서 "명함 초안 파일" 폴더 생성 (또는 CONFIG에서 지정한 이름)
+2. 폴더는 Microsoft Graph API를 통해 자동으로 접근됩니다
 
 ## 사용 방법
 
@@ -157,19 +180,22 @@ const CONFIG = {
 - MailApp 서비스 권한 확인
 
 ### 파일 업로드가 안 되는 경우
-- Google Drive API 권한 확인
-- 파일 크기 제한 확인 (Google Apps Script는 50MB 제한)
-- Drive 폴더 생성 권한 확인
+- Microsoft Graph API 권한 확인 (`Files.ReadWrite.All`)
+- 파일 크기 제한 확인 (OneDrive는 250GB 제한, 단일 파일은 250MB)
+- OneDrive 폴더 경로가 올바른지 확인
+- Client Secret이 올바르게 설정되었는지 확인
 
-### 시트를 찾을 수 없는 경우
-- 시트 이름이 정확히 일치하는지 확인 (`CONFIG.SHEET_NAME`)
-- 시트가 삭제되지 않았는지 확인
+### Excel 파일을 찾을 수 없는 경우
+- 파일 이름이 정확히 일치하는지 확인 (`CONFIG.EXCEL_FILE_NAME`)
+- OneDrive에 파일이 존재하는지 확인
+- Microsoft Graph API 권한이 올바르게 설정되었는지 확인
 
 ## 기술 스택
 
 - **Google Apps Script**: 백엔드 로직 및 자동화
-- **Google Sheets**: 데이터베이스
-- **Google Drive**: 파일 저장소
+- **Microsoft 365 OneDrive**: 데이터베이스 (Excel 파일)
+- **Microsoft Graph API**: OneDrive 접근
+- **Azure AD**: 인증 및 권한 관리
 - **HTML/CSS/JavaScript**: 프론트엔드 UI
 - **HtmlService**: 웹 앱 서비스
 

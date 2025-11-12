@@ -10,10 +10,11 @@
 
 // 설정 변수
 const CONFIG = {
-  SHEET_NAME: '신청목록',
+  EXCEL_FILE_NAME: '명함 신청 관리 DB.xlsx', // OneDrive Excel 파일 이름
+  WORKSHEET_NAME: '신청목록', // 워크시트 이름
   ADMIN_EMAIL: 'bysong@law-lin.com',
   ADMIN_PASSWORD: 'admin123', // 실제 사용 시 변경 필요
-  DRIVE_FOLDER_NAME: '명함 초안 파일'
+  ONEDRIVE_FOLDER_PATH: '/명함 초안 파일' // OneDrive 폴더 경로
 };
 
 /**
@@ -57,12 +58,11 @@ function doGet(e) {
  */
 function submitApplication(data) {
   try {
-    var sheet = getSheet();
-    var lastRow = sheet.getLastRow();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
     
     // 신청ID 생성 (LN-YYYY-NNNN 형식)
     var year = new Date().getFullYear();
-    var sequence = getNextSequence();
+    var sequence = getNextSequence(fileId);
     var applicationId = 'LN-' + year + '-' + String(sequence).padStart(4, '0');
     
     // 현재 날짜
@@ -86,8 +86,8 @@ function submitApplication(data) {
       ''                                // M: 처리일자
     ];
     
-    // 시트에 데이터 추가
-    sheet.appendRow(rowData);
+    // Excel 파일에 데이터 추가
+    addExcelRow(fileId, CONFIG.WORKSHEET_NAME, '신청목록테이블', rowData);
     
     // 이메일 알림 발송
     sendNewApplicationEmails(applicationId, data);
@@ -111,18 +111,18 @@ function submitApplication(data) {
  */
 function checkApplicationStatus(email, applicationId) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     
     // 헤더 행 제외하고 검색
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId && data[i][2] === email) {
+      if (data[i] && data[i][0] === applicationId && data[i][2] === email) {
         return {
           success: true,
-          status: data[i][1],
+          status: data[i][1] || '',
           applicationId: data[i][0],
-          registeredDate: data[i][9],
-          message: "귀하의 명함은 현재 '" + data[i][1] + "' 상태입니다."
+          registeredDate: data[i][9] || '',
+          message: "귀하의 명함은 현재 '" + (data[i][1] || '') + "' 상태입니다."
         };
       }
     }
@@ -145,19 +145,19 @@ function checkApplicationStatus(email, applicationId) {
  */
 function getApplicationForReview(applicationId) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId) {
+      if (data[i] && data[i][0] === applicationId) {
         return {
           success: true,
           applicationId: data[i][0],
-          status: data[i][1],
-          email: data[i][2],
-          name: data[i][3],
-          fileUrl: data[i][10],
-          canApprove: data[i][1] === '초안전달' || data[i][1] === '수정요청'
+          status: data[i][1] || '',
+          email: data[i][2] || '',
+          name: data[i][3] || '',
+          fileUrl: data[i][10] || '',
+          canApprove: (data[i][1] === '초안전달' || data[i][1] === '수정요청')
         };
       }
     }
@@ -180,13 +180,13 @@ function getApplicationForReview(applicationId) {
  */
 function approveProduction(applicationId) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     var rowIndex = -1;
     
     // 신청 내역 찾기
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId) {
+      if (data[i] && data[i][0] === applicationId) {
         rowIndex = i + 1;
         break;
       }
@@ -196,8 +196,9 @@ function approveProduction(applicationId) {
       return { success: false, message: '신청 내역을 찾을 수 없습니다.' };
     }
     
-    // 상태 변경
-    sheet.getRange(rowIndex, 2).setValue('제작');
+    // 상태 변경 (B열 = 인덱스 1)
+    var cellAddress = 'B' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, cellAddress, '제작');
     
     // 관리자에게 알림 메일 발송
     var applicationData = data[rowIndex - 1];
@@ -221,13 +222,13 @@ function approveProduction(applicationId) {
  */
 function requestModification(applicationId, reason) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     var rowIndex = -1;
     
     // 신청 내역 찾기
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId) {
+      if (data[i] && data[i][0] === applicationId) {
         rowIndex = i + 1;
         break;
       }
@@ -237,13 +238,15 @@ function requestModification(applicationId, reason) {
       return { success: false, message: '신청 내역을 찾을 수 없습니다.' };
     }
     
-    // 상태 변경
-    sheet.getRange(rowIndex, 2).setValue('수정요청');
+    // 상태 변경 (B열)
+    var statusCell = 'B' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, statusCell, '수정요청');
     
-    // 비고에 수정 사유 추가
-    var currentNotes = sheet.getRange(rowIndex, 9).getValue();
+    // 비고에 수정 사유 추가 (I열 = 인덱스 8)
+    var currentNotes = data[rowIndex - 1][8] || '';
     var newNotes = currentNotes + '\n[수정요청] ' + reason;
-    sheet.getRange(rowIndex, 9).setValue(newNotes);
+    var notesCell = 'I' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, notesCell, newNotes);
     
     // 관리자에게 알림 메일 발송
     var applicationData = data[rowIndex - 1];
@@ -274,13 +277,14 @@ function adminLogin(password) {
  */
 function getAdminApplicationList(statusFilter) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     var result = [];
     
     // 헤더 제외하고 데이터 변환
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
+      if (!row || !row[0]) continue; // 빈 행 건너뛰기
       
       // 상태 필터 적용
       if (statusFilter && statusFilter !== '전체' && row[1] !== statusFilter) {
@@ -288,19 +292,19 @@ function getAdminApplicationList(statusFilter) {
       }
       
       result.push({
-        applicationId: row[0],
-        status: row[1],
-        email: row[2],
-        name: row[3],
-        quantity: row[4],
-        isSame: row[5],
-        isLawyer: row[6],
-        lawyerName: row[7],
-        notes: row[8],
-        registeredDate: row[9],
-        fileUrl: row[10],
-        processor: row[11],
-        processedDate: row[12]
+        applicationId: row[0] || '',
+        status: row[1] || '',
+        email: row[2] || '',
+        name: row[3] || '',
+        quantity: row[4] || '',
+        isSame: row[5] || '',
+        isLawyer: row[6] || '',
+        lawyerName: row[7] || '',
+        notes: row[8] || '',
+        registeredDate: row[9] || '',
+        fileUrl: row[10] || '',
+        processor: row[11] || '',
+        processedDate: row[12] || ''
       });
     }
     
@@ -326,22 +330,18 @@ function adminAttachDraft(applicationId, fileData, fileName, mimeType) {
     var base64Data = fileData.split(',')[1] || fileData; // data:image/png;base64, 부분 제거
     var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
     
-    // Google Drive에 파일 업로드
-    var folder = getOrCreateDriveFolder();
-    var file = folder.createFile(blob);
-    file.setName(fileName || '초안_' + applicationId);
+    // OneDrive에 파일 업로드
+    var uploadFileName = fileName || '초안_' + applicationId;
+    var uploadedFile = uploadFileToOneDrive(blob, uploadFileName, CONFIG.ONEDRIVE_FOLDER_PATH);
+    var fileUrl = uploadedFile.shareUrl || uploadedFile.webUrl || '';
     
-    // 공유 설정 (링크로 접근 가능하도록)
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    var fileUrl = file.getUrl();
-    
-    // 시트에 파일 링크 저장
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    // Excel 파일에 파일 링크 저장
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     var rowIndex = -1;
     
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId) {
+      if (data[i] && data[i][0] === applicationId) {
         rowIndex = i + 1;
         break;
       }
@@ -351,8 +351,9 @@ function adminAttachDraft(applicationId, fileData, fileName, mimeType) {
       return { success: false, message: '신청 내역을 찾을 수 없습니다.' };
     }
     
-    // 파일 링크 저장
-    sheet.getRange(rowIndex, 11).setValue(fileUrl);
+    // 파일 링크 저장 (K열 = 인덱스 10)
+    var fileUrlCell = 'K' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, fileUrlCell, fileUrl);
     
     return {
       success: true,
@@ -373,13 +374,13 @@ function adminAttachDraft(applicationId, fileData, fileName, mimeType) {
  */
 function adminSendDraft(applicationId) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     var rowIndex = -1;
     var applicationData = null;
     
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId) {
+      if (data[i] && data[i][0] === applicationId) {
         rowIndex = i + 1;
         applicationData = data[i];
         break;
@@ -391,16 +392,17 @@ function adminSendDraft(applicationId) {
     }
     
     // 파일 링크 확인
-    var fileUrl = applicationData[10];
+    var fileUrl = applicationData[10] || '';
     if (!fileUrl) {
       return { success: false, message: '초안 파일이 첨부되지 않았습니다.' };
     }
     
-    // 상태를 '초안전달'로 변경
-    sheet.getRange(rowIndex, 2).setValue('초안전달');
+    // 상태를 '초안전달'로 변경 (B열)
+    var statusCell = 'B' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, statusCell, '초안전달');
     
     // 신청자에게 초안 확인 요청 이메일 발송
-    sendDraftReviewEmail(applicationId, applicationData[2], applicationData[3], fileUrl);
+    sendDraftReviewEmail(applicationId, applicationData[2] || '', applicationData[3] || '', fileUrl);
     
     return {
       success: true,
@@ -420,12 +422,12 @@ function adminSendDraft(applicationId) {
  */
 function adminChangeStatus(applicationId, newStatus) {
   try {
-    var sheet = getSheet();
-    var data = sheet.getDataRange().getValues();
+    var fileId = getExcelFileId(CONFIG.EXCEL_FILE_NAME);
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:M');
     var rowIndex = -1;
     
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === applicationId) {
+      if (data[i] && data[i][0] === applicationId) {
         rowIndex = i + 1;
         break;
       }
@@ -435,14 +437,17 @@ function adminChangeStatus(applicationId, newStatus) {
       return { success: false, message: '신청 내역을 찾을 수 없습니다.' };
     }
     
-    // 상태 변경
-    sheet.getRange(rowIndex, 2).setValue(newStatus);
+    // 상태 변경 (B열)
+    var statusCell = 'B' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, statusCell, newStatus);
     
     // 처리자 및 처리일자 기록
     var today = new Date();
     var dateStr = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    sheet.getRange(rowIndex, 12).setValue(Session.getActiveUser().getEmail());
-    sheet.getRange(rowIndex, 13).setValue(dateStr);
+    var processorCell = 'L' + rowIndex;
+    var processedDateCell = 'M' + rowIndex;
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, processorCell, Session.getActiveUser().getEmail());
+    updateExcelCell(fileId, CONFIG.WORKSHEET_NAME, processedDateCell, dateStr);
     
     return {
       success: true,
@@ -460,58 +465,27 @@ function adminChangeStatus(applicationId, newStatus) {
 // ==================== 유틸리티 함수 ====================
 
 /**
- * 시트 가져오기
- */
-function getSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
-  
-  if (!sheet) {
-    // 시트가 없으면 생성
-    sheet = ss.insertSheet(CONFIG.SHEET_NAME);
-    // 헤더 설정
-    var headers = [
-      '신청ID', 'Status', '신청자계정', '등록자', '통', 
-      '기존동일여부', '변호사여부', '담당변호사', '비고', 
-      '등록일', '첨부파일', '처리자', '처리일자'
-    ];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-  }
-  
-  return sheet;
-}
-
-/**
  * 다음 시퀀스 번호 가져오기
  */
-function getNextSequence() {
-  var sheet = getSheet();
-  var lastRow = sheet.getLastRow();
-  
-  if (lastRow <= 1) {
+function getNextSequence(fileId) {
+  try {
+    var data = readExcelRange(fileId, CONFIG.WORKSHEET_NAME, 'A:A');
+    
+    if (data.length <= 1) {
+      return 1001;
+    }
+    
+    // 마지막 신청ID에서 시퀀스 추출
+    var lastId = data[data.length - 1][0];
+    if (lastId && lastId.toString().match(/LN-\d{4}-(\d+)/)) {
+      var match = lastId.toString().match(/LN-\d{4}-(\d+)/);
+      return parseInt(match[1]) + 1;
+    }
+    
     return 1001;
-  }
-  
-  // 마지막 신청ID에서 시퀀스 추출
-  var lastId = sheet.getRange(lastRow, 1).getValue();
-  if (lastId && lastId.toString().match(/LN-\d{4}-(\d+)/)) {
-    var match = lastId.toString().match(/LN-\d{4}-(\d+)/);
-    return parseInt(match[1]) + 1;
-  }
-  
-  return 1001;
-}
-
-/**
- * Drive 폴더 가져오기 또는 생성
- */
-function getOrCreateDriveFolder() {
-  var folders = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
-  if (folders.hasNext()) {
-    return folders.next();
-  } else {
-    return DriveApp.createFolder(CONFIG.DRIVE_FOLDER_NAME);
+  } catch (error) {
+    Logger.log('Error in getNextSequence: ' + error.toString());
+    return 1001;
   }
 }
 
